@@ -1,6 +1,7 @@
-from fastapi import FastAPI
-from app.core.database import engine
+from fastapi import FastAPI, Depends
 from app.core.config import get_settings
+from app.core.dependencies import get_current_user
+from app.models.organisation import User
 
 settings = get_settings()
 
@@ -14,3 +15,12 @@ app = FastAPI(
 @app.get("/health")
 def health_check():
     return {"status": "ok", "env": settings.APP_ENV}
+
+
+@app.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "role": current_user.role,
+    }
