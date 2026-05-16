@@ -1,5 +1,8 @@
 from fastapi import FastAPI, Depends
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.core.config import get_settings
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.core.dependencies import get_current_user
 from app.models.organisation import User
 
@@ -10,6 +13,9 @@ app = FastAPI(
     description="Enterprise grade document intelligence. Accessible to everyone.",
     version="0.1.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 
 @app.get("/health")
