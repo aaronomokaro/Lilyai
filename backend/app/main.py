@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+
 from app.core.config import get_settings
-from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.models.organisation import User
 
 settings = get_settings()

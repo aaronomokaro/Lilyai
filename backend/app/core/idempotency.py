@@ -1,7 +1,9 @@
 import json
 from typing import Optional
-from fastapi import Request, Response, HTTPException, status
+
 import redis.asyncio as aioredis
+from fastapi import HTTPException, Request, Response, status
+
 from app.core.config import get_settings
 
 settings = get_settings()

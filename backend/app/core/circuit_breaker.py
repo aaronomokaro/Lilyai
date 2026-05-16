@@ -1,6 +1,7 @@
 import time
 from enum import Enum
-from typing import Callable, Any
+from typing import Any, Callable
+
 from fastapi import HTTPException, status
 
 

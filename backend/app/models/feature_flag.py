@@ -1,7 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, Boolean, Integer
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.sql import func
+
 from app.core.database import Base
 
 
@@ -16,4 +18,6 @@ class FeatureFlag(Base):
     enabled_for_tiers = Column(ARRAY(String), nullable=False, default=list)
     enabled_for_users = Column(ARRAY(UUID(as_uuid=True)), nullable=False, default=list)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
-    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )

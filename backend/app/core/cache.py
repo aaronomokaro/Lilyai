@@ -1,6 +1,8 @@
 import json
 from typing import Any, Optional
+
 import redis.asyncio as aioredis
+
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -40,12 +42,12 @@ async def cache_delete_pattern(pattern: str) -> None:
 
 
 # TTL constants from the architecture
-TTL_SUBSCRIPTION = 900       # 15 minutes
-TTL_FEATURE_FLAGS = 60       # 60 seconds
-TTL_USER_PROFILE = 900       # 15 minutes
-TTL_DOCUMENT_LIST = 300      # 5 minutes
+TTL_SUBSCRIPTION = 900  # 15 minutes
+TTL_FEATURE_FLAGS = 60  # 60 seconds
+TTL_USER_PROFILE = 900  # 15 minutes
+TTL_DOCUMENT_LIST = 300  # 5 minutes
 TTL_CONVERSATION_LIST = 300  # 5 minutes
-TTL_TOKEN_VERSION = 3600     # 1 hour
+TTL_TOKEN_VERSION = 3600  # 1 hour
 
 
 # Cache key helpers
