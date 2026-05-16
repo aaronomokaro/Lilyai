@@ -1,0 +1,30 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment variables - never commit secrets
+.env
+.env.*
+
+# pytest cache
+.pytest_cache/
+
+# Alembic - we commit migrations but not cache
+*.pyc
+
+# Mac system files
+.DS_Store
+
+# Cursor
+.cursor/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
