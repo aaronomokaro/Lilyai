@@ -1,14 +1,13 @@
 import uuid
 
 from celery import Celery
-from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.models.document import Document
 from app.models.processing import Chunk, ProcessingJob
 from app.services.chunking_service import chunk_document
-from app.services.document_extractor import extract_text, get_page_count
+from app.services.document_extractor import extract_text
 from app.services.embedding_service import embed_chunks
 from app.services.qdrant_service import ensure_collection_exists, store_chunks
 from app.services.s3_service import download_document
@@ -39,7 +38,13 @@ celery_app.conf.update(
     name="process_document",
 )
 def process_document(self, document_id: str, user_id: str, organisation_id: str = None):
+    # Import here to avoid circular imports - websocket manager lives in the
+    # FastAPI app but the worker runs in a separate process
+    from app.services.websocket_service import manager
+
     db = SessionLocal()
+    document = None
+    job = None
 
     try:
         # Step 1 - mark job as started
@@ -117,18 +122,33 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
             job.chunks_processed = len(chunks)
         db.commit()
 
+        # Step 10 - notify frontend via WebSocket
+        await_sync(
+            manager.send_document_ready(
+                user_id=user_id,
+                document_id=document_id,
+                filename=document.filename,
+            )
+        )
+
     except Exception as exc:
         if job:
             job.status = "failed"
             job.error_message = str(exc)
             db.commit()
 
-        document = (
-            db.query(Document).filter(Document.id == uuid.UUID(document_id)).first()
-        )
         if document:
             document.status = "failed"
             db.commit()
+
+        # Notify frontend of failure
+        await_sync(
+            manager.send_document_failed(
+                user_id=user_id,
+                document_id=document_id,
+                filename=document.filename if document else "Unknown",
+            )
+        )
 
         raise self.retry(exc=exc)
 
