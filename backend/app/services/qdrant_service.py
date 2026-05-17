@@ -1,0 +1,144 @@
+from typing import List
+
+from fastapi import HTTPException, status
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
+
+from app.core.config import get_settings
+
+settings = get_settings()
+
+COLLECTION_NAME = "document_chunks"
+VECTOR_SIZE = 1024
+
+
+def get_qdrant_client() -> QdrantClient:
+    return QdrantClient(
+        url=settings.QDRANT_URL,
+        api_key=settings.QDRANT_API_KEY,
+    )
+
+
+def ensure_collection_exists() -> None:
+    client = get_qdrant_client()
+    collections = client.get_collections().collections
+    collection_names = [c.name for c in collections]
+
+    if COLLECTION_NAME not in collection_names:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=VECTOR_SIZE,
+                distance=Distance.COSINE,
+            ),
+        )
+
+
+def store_chunks(chunks: List[dict]) -> None:
+    client = get_qdrant_client()
+
+    points = []
+    for chunk in chunks:
+        points.append(
+            PointStruct(
+                id=str(chunk["id"]),
+                vector=chunk["embedding"],
+                payload={
+                    "document_id": str(chunk["document_id"]),
+                    "user_id": str(chunk["user_id"]),
+                    "organisation_id": (
+                        str(chunk["organisation_id"])
+                        if chunk.get("organisation_id")
+                        else None
+                    ),
+                    "chunk_index": chunk["chunk_index"],
+                    "content": chunk["content"],
+                },
+            )
+        )
+
+    try:
+        client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=points,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store vectors: {str(e)}",
+        )
+
+
+def search_chunks(
+    query_vector: List[float],
+    user_id: str,
+    organisation_id: str = None,
+    top_k: int = 5,
+    document_ids: List[str] = None,
+) -> List[dict]:
+    client = get_qdrant_client()
+
+    # Build filter for data isolation - users only see their own chunks
+    must_conditions = [
+        FieldCondition(
+            key="user_id",
+            match=MatchValue(value=user_id),
+        )
+    ]
+
+    if organisation_id:
+        must_conditions.append(
+            FieldCondition(
+                key="organisation_id",
+                match=MatchValue(value=organisation_id),
+            )
+        )
+
+    if document_ids:
+        must_conditions.append(
+            FieldCondition(
+                key="document_id",
+                match=MatchValue(any=document_ids),
+            )
+        )
+
+    results = client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=query_vector,
+        query_filter=Filter(must=must_conditions),
+        limit=top_k,
+        with_payload=True,
+    )
+
+    return [
+        {
+            "chunk_id": result.id,
+            "document_id": result.payload["document_id"],
+            "content": result.payload["content"],
+            "chunk_index": result.payload["chunk_index"],
+            "score": result.score,
+        }
+        for result in results
+    ]
+
+
+def delete_document_chunks(document_id: str) -> None:
+    client = get_qdrant_client()
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=Filter(
+            must=[
+                FieldCondition(
+                    key="document_id",
+                    match=MatchValue(value=document_id),
+                )
+            ]
+        ),
+    )

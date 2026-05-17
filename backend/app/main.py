@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from app.api.documents import router as documents_router
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -17,6 +17,8 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+app.include_router(documents_router)
 
 
 @app.get("/health")
