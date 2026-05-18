@@ -6,12 +6,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.agents.orchestrator_agent import orchestrate
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.conversation import Conversation
 from app.models.organisation import User
 from app.models.subscription import Subscription
-from app.services.query_service import process_query
 
 router = APIRouter(prefix="/queries", tags=["queries"])
 
@@ -20,6 +20,7 @@ class QueryRequest(BaseModel):
     question: str
     conversation_id: Optional[uuid.UUID] = None
     document_ids: Optional[List[str]] = None
+    risk_types: Optional[List[str]] = None
 
 
 async def get_or_create_conversation(
@@ -44,7 +45,6 @@ async def get_or_create_conversation(
             )
         return conversation
 
-    # Create new conversation
     conversation = Conversation(
         user_id=user.id,
         organisation_id=user.organisation_id,
@@ -92,19 +92,23 @@ async def ask_question(
 
     tier = await get_user_tier(current_user, db)
 
-    async def stream_response():
-        async for token in process_query(
-            question=request.question,
-            conversation_id=conversation.id,
-            user_id=current_user.id,
-            organisation_id=current_user.organisation_id,
-            tier=tier,
-            db=db,
-            document_ids=request.document_ids,
-        ):
-            yield token
-
-    return StreamingResponse(
-        stream_response(),
-        media_type="text/plain",
+    result = await orchestrate(
+        request=request.question,
+        user_id=str(current_user.id),
+        conversation_id=str(conversation.id),
+        organisation_id=(
+            str(current_user.organisation_id) if current_user.organisation_id else None
+        ),
+        tier=tier,
+        document_ids=request.document_ids or [],
+        db=db,
     )
+
+    if result.get("requires_confirmation"):
+        return {
+            "requires_confirmation": True,
+            "intent": result["intent"],
+            "message": result["message"],
+        }
+
+    return {"status": "completed", "intent": result.get("intent")}
