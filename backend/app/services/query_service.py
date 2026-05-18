@@ -4,14 +4,11 @@ from typing import AsyncGenerator, List
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.agent import AgentTrajectory
 from app.models.conversation import Conversation, ConversationTurn, Query
 from app.models.document import Document
-from app.services.bm25_service import bm25_search
 from app.services.claude_service import extract_citations, generate_answer
-from app.services.embedding_service import embed_single
-from app.services.qdrant_service import search_chunks
 from app.services.query_classifier import classify_query
-from app.services.rrf_service import reciprocal_rank_fusion
 from app.services.websocket_service import manager
 
 settings = get_settings()
@@ -23,7 +20,6 @@ async def get_conversation_history(
     tier: str,
     db: Session,
 ) -> List[dict]:
-    # Number of full turns to include based on tier
     turns_by_tier = {
         "free": 5,
         "starter": 8,
@@ -40,7 +36,6 @@ async def get_conversation_history(
         .all()
     )
 
-    # Reverse to get chronological order
     turns = list(reversed(turns))
 
     history = []
@@ -95,32 +90,17 @@ async def process_query(
     # Step 1 - classify query
     query_type, top_k = classify_query(question)
 
-    # Step 2 - embed the question
-    query_vector = await embed_single(question)
+    # Steps 2-5 - retrieval agent handles complexity assessment,
+    # embedding, semantic search, BM25, RRF, and iterative retrieval
+    from app.agents.retrieval_agent import retrieve
 
-    # Step 3 - semantic search in Qdrant
-    semantic_results = search_chunks(
-        query_vector=query_vector,
+    merged_chunks, trajectory, was_successful = await retrieve(
+        question=question,
+        query_type=query_type,
         user_id=str(user_id),
         organisation_id=str(organisation_id) if organisation_id else None,
         top_k=top_k,
         document_ids=document_ids,
-    )
-
-    # Step 4 - BM25 search on semantic results
-    # We run BM25 on the semantic candidates not all chunks
-    # This keeps BM25 fast and relevant
-    bm25_results = bm25_search(
-        query=question,
-        chunks=semantic_results,
-        top_k=top_k,
-    )
-
-    # Step 5 - merge with RRF
-    merged_chunks = reciprocal_rank_fusion(
-        bm25_results=bm25_results,
-        semantic_results=semantic_results,
-        top_k=top_k,
     )
 
     # Step 6 - enrich chunks with metadata
@@ -156,6 +136,20 @@ async def process_query(
         chunks_used=[uuid.UUID(cid) for cid in chunk_ids],
     )
     db.add(query_record)
+    db.commit()
+
+    # Log agent trajectory - store both successful and failed paths
+    # so we can calculate success rate in the evaluation framework
+    trajectory_record = AgentTrajectory(
+        query_id=query_record.id,
+        user_id=user_id,
+        agent_name="retrieval_agent",
+        steps=trajectory,
+        tools_used=["embed_single", "search_chunks", "bm25_search", "rrf_merge"],
+        iterations=len(trajectory),
+        was_successful=was_successful,
+    )
+    db.add(trajectory_record)
     db.commit()
 
     # Step 9 - stream answer from Claude
