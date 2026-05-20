@@ -40,7 +40,6 @@ async def upload_document_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Check idempotency - prevent duplicate uploads on retry
     cached = await check_idempotency(
         prefix="document_upload",
         user_id=str(current_user.id),
@@ -49,19 +48,14 @@ async def upload_document_endpoint(
     if cached:
         return cached
 
-    # Read file content into memory
     file_content = await file.read()
-
-    # Get user subscription for plan limits
     subscription = await get_user_subscription(current_user, db)
 
-    # Get page count before full validation
     from app.services.document_validator import validate_file_type
 
     mime_type = validate_file_type(file_content, file.filename)
     page_count = get_page_count(file_content, mime_type)
 
-    # Validate document against plan limits
     mime_type = validate_document(
         file_content=file_content,
         filename=file.filename,
@@ -70,7 +64,6 @@ async def upload_document_endpoint(
         page_count=page_count,
     )
 
-    # Generate document ID and build S3 key
     doc_id = uuid.uuid4()
     org_id = (
         str(current_user.organisation_id)
@@ -84,14 +77,12 @@ async def upload_document_endpoint(
         filename=file.filename,
     )
 
-    # Upload to S3
     await upload_document(
         file_content=file_content,
         s3_key=s3_key,
         content_type=mime_type,
     )
 
-    # Create document record in PostgreSQL
     document = Document(
         id=doc_id,
         user_id=current_user.id,
@@ -106,7 +97,6 @@ async def upload_document_endpoint(
     )
     db.add(document)
 
-    # Create processing job record
     processing_job = ProcessingJob(
         document_id=doc_id,
         user_id=current_user.id,
@@ -115,7 +105,6 @@ async def upload_document_endpoint(
     db.add(processing_job)
     db.commit()
 
-    # Queue Celery background task
     process_document.delay(
         document_id=str(doc_id),
         user_id=str(current_user.id),
@@ -131,7 +120,6 @@ async def upload_document_endpoint(
         "message": "Document uploaded successfully. Processing will begin shortly.",
     }
 
-    # Store idempotent response
     await save_idempotent_response(
         prefix="document_upload",
         user_id=str(current_user.id),
@@ -140,3 +128,128 @@ async def upload_document_endpoint(
     )
 
     return response_data
+
+
+@router.get("/search/")
+async def search_documents(
+    q: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Search query must be at least 2 characters.",
+        )
+
+    documents = (
+        db.query(Document)
+        .filter(
+            Document.user_id == current_user.id,
+            Document.is_active == True,
+            Document.filename.ilike(f"%{q}%"),
+        )
+        .order_by(Document.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return [
+        {
+            "id": str(doc.id),
+            "filename": doc.filename,
+            "file_type": doc.file_type,
+            "status": doc.status,
+            "created_at": doc.created_at.isoformat(),
+        }
+        for doc in documents
+    ]
+
+
+@router.get("/")
+async def list_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    documents = (
+        db.query(Document)
+        .filter(
+            Document.user_id == current_user.id,
+            Document.is_active == True,
+        )
+        .order_by(Document.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": str(doc.id),
+            "filename": doc.filename,
+            "file_type": doc.file_type,
+            "file_size_bytes": doc.file_size_bytes,
+            "page_count": doc.page_count,
+            "status": doc.status,
+            "created_at": doc.created_at.isoformat(),
+        }
+        for doc in documents
+    ]
+
+
+@router.get("/{document_id}")
+async def get_document(
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == current_user.id,
+            Document.is_active == True,
+        )
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+
+    return {
+        "id": str(document.id),
+        "filename": document.filename,
+        "file_type": document.file_type,
+        "file_size_bytes": document.file_size_bytes,
+        "page_count": document.page_count,
+        "status": document.status,
+        "doc_type": document.doc_type,
+        "created_at": document.created_at.isoformat(),
+    }
+
+
+@router.delete("/{document_id}", status_code=204)
+async def archive_document(
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == current_user.id,
+            Document.is_active == True,
+        )
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+
+    document.is_active = False
+    db.commit()

@@ -2,10 +2,13 @@ from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from slowapi.errors import RateLimitExceeded
 
 from app.api.collections import router as collections_router
+from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.integrations import router as integrations_router
+from app.api.outputs import router as outputs_router
 from app.api.queries import router as queries_router
 from app.api.tags import router as tags_router
+from app.api.usage import router as usage_router
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -29,6 +32,10 @@ app.include_router(queries_router)
 app.include_router(collections_router)
 app.include_router(tags_router)
 app.include_router(integrations_router)
+
+app.include_router(conversations_router)
+app.include_router(outputs_router)
+app.include_router(usage_router)
 
 
 @app.get("/health")

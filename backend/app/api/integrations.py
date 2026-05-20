@@ -1,10 +1,14 @@
+import secrets
 import uuid
 from typing import Optional
 
+import httpx
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.organisation import User
@@ -19,8 +23,17 @@ from app.services.integration_service import (
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
+settings = get_settings()
+
 DRIVE_MINIMUM_PLAN = "starter"
 PLAN_ORDER = ["free", "starter", "professional", "enterprise"]
+
+GOOGLE_OAUTH_SCOPES = {
+    "gmail": "https://www.googleapis.com/auth/gmail.send",
+    "drive": "https://www.googleapis.com/auth/drive.file",
+}
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 
 def get_user_plan(user: User, db: Session) -> str:
@@ -36,7 +49,23 @@ def plan_meets_minimum(user_plan: str, minimum_plan: str) -> bool:
     return user_level >= min_level
 
 
-class OAuthCallbackRequest(BaseModel):
+def get_google_client_id() -> str:
+    # TODO: Add GOOGLE_CLIENT_ID to environment variables when setting up Google OAuth
+    return getattr(settings, "GOOGLE_CLIENT_ID", "")
+
+
+def get_google_client_secret() -> str:
+    # TODO: Add GOOGLE_CLIENT_SECRET to environment variables when setting up Google OAuth
+    return getattr(settings, "GOOGLE_CLIENT_SECRET", "")
+
+
+def get_google_redirect_uri(provider: str) -> str:
+    # TODO: Update base URL when Railway is configured
+    base_url = "http://localhost:8001"
+    return f"{base_url}/integrations/{provider}/callback"
+
+
+class OAuthTokenRequest(BaseModel):
     provider: str
     access_token: str
     refresh_token: Optional[str] = None
@@ -55,6 +84,7 @@ class SaveToDriveRequest(BaseModel):
     filename: str
 
 
+# Status endpoint must come before dynamic /{provider} routes
 @router.get("/status")
 async def get_integration_status(
     db: Session = Depends(get_db),
@@ -76,9 +106,10 @@ async def get_integration_status(
     }
 
 
-@router.post("/callback")
-async def oauth_callback(
-    request: OAuthCallbackRequest,
+# Static endpoints before dynamic /{provider} routes
+@router.post("/token")
+async def store_oauth_token(
+    request: OAuthTokenRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -104,21 +135,6 @@ async def oauth_callback(
     )
 
     return {"message": f"{request.provider.title()} connected successfully."}
-
-
-@router.delete("/{provider}/disconnect", status_code=204)
-async def disconnect(
-    provider: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if provider not in ["gmail", "drive"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid provider. Must be gmail or drive.",
-        )
-
-    disconnect_integration(str(current_user.id), provider, db)
 
 
 @router.post("/gmail/send")
@@ -196,3 +212,81 @@ async def save_output_to_drive(
         )
 
     return result
+
+
+# Dynamic /{provider} routes must come after all static routes
+@router.get("/{provider}/connect")
+async def initiate_oauth(
+    provider: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if provider not in ["gmail", "drive"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid provider. Must be gmail or drive.",
+        )
+
+    if provider == "drive":
+        user_plan = get_user_plan(current_user, db)
+        if not plan_meets_minimum(user_plan, DRIVE_MINIMUM_PLAN):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Google Drive integration requires Starter plan or above.",
+            )
+
+    state = secrets.token_urlsafe(32)
+
+    redis = await aioredis.from_url(settings.REDIS_URL)
+    await redis.set(
+        f"oauth_state:{current_user.id}:{state}",
+        provider,
+        ex=600,
+    )
+    await redis.aclose()
+
+    scope = GOOGLE_OAUTH_SCOPES[provider]
+    client_id = get_google_client_id()
+    redirect_uri = get_google_redirect_uri(provider)
+
+    oauth_url = (
+        f"{GOOGLE_AUTH_URL}"
+        f"?client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope={scope}"
+        f"&state={state}"
+        f"&access_type=offline"
+        f"&prompt=consent"
+    )
+
+    return {
+        "oauth_url": oauth_url,
+        "provider": provider,
+    }
+
+
+@router.get("/{provider}/callback")
+async def oauth_callback_redirect(
+    provider: str,
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if provider not in ["gmail", "drive"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid provider.",
+        )
+
+    redis = await aioredis.from_url(settings.REDIS_URL)
+    stored_provider = await redis.get(f"oauth_state:{current_user.id}:{state}")
+    await redis.delete(f"oauth_state:{current_user.id}:{state}")
+    await redis.aclose()
+
+    if not stored_provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired state parameter. Please try connecting again.",
+        )
