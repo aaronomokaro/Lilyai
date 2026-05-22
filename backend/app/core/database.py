@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import get_settings
@@ -17,6 +17,32 @@ class Base(DeclarativeBase):
 def get_db():
     db = SessionLocal()
     try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_db_with_user(user_id: str, organisation_id: str = None):
+    db = SessionLocal()
+    try:
+        # Set session variables for RLS policies
+        db.execute(
+            text("SELECT set_config('app.current_user_id', :user_id, true)"),
+            {"user_id": user_id},
+        )
+        if organisation_id:
+            db.execute(
+                text(
+                    "SELECT set_config('app.current_org_id', :org_id, true)"
+                ),
+                {"org_id": organisation_id},
+            )
+        else:
+            db.execute(
+                text(
+                    "SELECT set_config('app.current_org_id', '', true)"
+                )
+            )
         yield db
     finally:
         db.close()
