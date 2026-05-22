@@ -150,7 +150,7 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
             )
         )
 
-        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
 
     finally:
         db.close()

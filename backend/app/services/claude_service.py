@@ -53,13 +53,15 @@ async def generate_answer(
     if conversation_history:
         messages.extend(conversation_history)
 
-    messages.append({
-        "role": "user",
-        "content": (
-            f"<documents>\n{context}\n</documents>\n\n"
-            f"<question>{question}</question>"
-        ),
-    })
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"<documents>\n{context}\n</documents>\n\n"
+                f"<question>{question}</question>"
+            ),
+        }
+    )
 
     # Stream directly without going through circuit breaker
     # Circuit breaker does not support async generators
@@ -72,6 +74,8 @@ async def generate_answer(
     ) as stream:
         async for text in stream.text_stream:
             yield text
+
+
 def extract_citations(answer: str) -> List[dict]:
     citations = []
     pattern = r"\[Document: ([^,]+), Page: ([^,]+), Chunk: ([^\]]+)\]"

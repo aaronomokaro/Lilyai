@@ -35,6 +35,7 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 @app.on_event("startup")
 async def startup_event():
     from app.services.qdrant_service import ensure_collection_exists
+
     ensure_collection_exists()
     scheduler = setup_scheduler()
     scheduler.start()
