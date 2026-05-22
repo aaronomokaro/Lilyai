@@ -1,0 +1,39 @@
+[
+    {
+        "id": "TC001",
+        "question": "What is the notice period for termination in this contract?",
+        "expected_answer": "The contract requires 30 days written notice for termination by either party.",
+        "expected_citations": [
+            {"filename": "sample_contract.pdf", "page": "4", "chunk_index": "2"}
+        ],
+        "query_type": "exact",
+        "document_source": "public_contracts",
+        "capability": "natural_language_questioning",
+        "is_no_answer": false,
+        "notes": "Basic exact query - single document"
+    },
+    {
+        "id": "TC002",
+        "question": "What are the payment obligations under this agreement?",
+        "expected_answer": "Payment is due within 30 days of invoice. Late payments incur 2% monthly interest.",
+        "expected_citations": [
+            {"filename": "sample_contract.pdf", "page": "6", "chunk_index": "4"}
+        ],
+        "query_type": "exact",
+        "document_source": "public_contracts",
+        "capability": "natural_language_questioning",
+        "is_no_answer": false,
+        "notes": "Payment terms extraction"
+    },
+    {
+        "id": "TC003",
+        "question": "What is the governing law for disputes under this contract?",
+        "expected_answer": "I could not find this information in the provided documents.",
+        "expected_citations": [],
+        "query_type": "exact",
+        "document_source": "public_contracts",
+        "capability": "natural_language_questioning",
+        "is_no_answer": true,
+        "notes": "No-answer case - critical for hallucination detection"
+    }
+]

@@ -4,6 +4,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.collections import router as collections_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
+from app.api.evaluation import router as evaluation_router
 from app.api.integrations import router as integrations_router
 from app.api.outputs import router as outputs_router
 from app.api.queries import router as queries_router
@@ -54,6 +55,8 @@ app.include_router(integrations_router)
 app.include_router(conversations_router)
 app.include_router(outputs_router)
 app.include_router(usage_router)
+
+app.include_router(evaluation_router)
 
 
 @app.get("/health")
