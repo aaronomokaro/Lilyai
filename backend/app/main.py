@@ -11,7 +11,9 @@ from app.api.tags import router as tags_router
 from app.api.usage import router as usage_router
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user
+from app.core.middleware import SecurityMiddleware
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.core.scheduler import setup_scheduler
 from app.models.organisation import User
 from app.services.websocket_service import manager
 
@@ -23,8 +25,24 @@ app = FastAPI(
     version="0.1.0",
 )
 
+from app.core.middleware import SecurityMiddleware
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+
+@app.on_event("startup")
+async def startup_event():
+    scheduler = setup_scheduler()
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.core.scheduler import scheduler
+
+    scheduler.shutdown()
+
 
 app.include_router(documents_router)
 app.include_router(queries_router)

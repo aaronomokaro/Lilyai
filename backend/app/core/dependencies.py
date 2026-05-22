@@ -40,7 +40,9 @@ def get_rls_db(
 ):
     db_gen = get_db_with_user(
         user_id=str(current_user.id),
-        organisation_id=str(current_user.organisation_id) if current_user.organisation_id else None,
+        organisation_id=(
+            str(current_user.organisation_id) if current_user.organisation_id else None
+        ),
     )
     db = next(db_gen)
     try:

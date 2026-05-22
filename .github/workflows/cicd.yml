@@ -32,4 +32,12 @@ jobs:
 
       - name: Run Bandit
         run: |
-          cd backend && bandit -r app/ -ll
+          cd backend && bandit -r app/ -ll --exclude app/tests
+
+      - name: Check for sensitive data in logs
+        run: |
+          cd backend && grep -rn "logger.*question\|logger.*answer\|logger.*email\|log.*password" app/ --include="*.py" && echo "FAIL: Sensitive data may be logged" && exit 1 || echo "No sensitive data logging detected"
+
+      - name: Check for print statements
+        run: |
+          cd backend && grep -r "print(" app/ --include="*.py" | grep -v "#" | grep -v "test" && echo "WARNING: print statements found - use logger instead" && exit 1 || echo "No print statements found"

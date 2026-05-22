@@ -32,17 +32,11 @@ def get_db_with_user(user_id: str, organisation_id: str = None):
         )
         if organisation_id:
             db.execute(
-                text(
-                    "SELECT set_config('app.current_org_id', :org_id, true)"
-                ),
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
                 {"org_id": organisation_id},
             )
         else:
-            db.execute(
-                text(
-                    "SELECT set_config('app.current_org_id', '', true)"
-                )
-            )
+            db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
         yield db
     finally:
         db.close()

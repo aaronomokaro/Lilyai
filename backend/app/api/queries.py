@@ -11,6 +11,7 @@ from app.agents.orchestrator_agent import orchestrate
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.core.prompt_guard import validate_question
 from app.models.conversation import Conversation
 from app.models.organisation import User
 from app.models.subscription import Subscription
@@ -120,17 +121,7 @@ async def ask_question(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not request.question.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Question cannot be empty.",
-        )
-
-    if len(request.question) > 2000:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Question too long. Maximum 2000 characters.",
-        )
+    validate_question(request.question)
 
     # Check usage limits before processing - hard stop if limit reached
     await check_usage_limits(current_user, db)
