@@ -46,9 +46,6 @@ async def generate_answer(
     client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     context = build_context(chunks)
-
-    # Use Haiku for all queries until evaluation data justifies routing
-    # TODO: Add Haiku vs Sonnet routing after evaluation framework runs
     model = "claude-haiku-4-5-20251001"
 
     messages = []
@@ -56,30 +53,25 @@ async def generate_answer(
     if conversation_history:
         messages.extend(conversation_history)
 
-    messages.append(
-        {
-            "role": "user",
-            "content": (
-                f"<documents>\n{context}\n</documents>\n\n"
-                f"<question>{question}</question>"
-            ),
-        }
-    )
+    messages.append({
+        "role": "user",
+        "content": (
+            f"<documents>\n{context}\n</documents>\n\n"
+            f"<question>{question}</question>"
+        ),
+    })
 
-    async def _stream():
-        async with client.messages.stream(
-            model=model,
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=messages,
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
-
-    async for token in await anthropic_breaker.call(_stream):
-        yield token
-
-
+    # Stream directly without going through circuit breaker
+    # Circuit breaker does not support async generators
+    # TODO: Add circuit breaker support for streaming in a future iteration
+    async with client.messages.stream(
+        model=model,
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=messages,
+    ) as stream:
+        async for text in stream.text_stream:
+            yield text
 def extract_citations(answer: str) -> List[dict]:
     citations = []
     pattern = r"\[Document: ([^,]+), Page: ([^,]+), Chunk: ([^\]]+)\]"

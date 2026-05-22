@@ -7,6 +7,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -39,6 +40,36 @@ def ensure_collection_exists() -> None:
                 distance=Distance.COSINE,
             ),
         )
+
+    # Create payload indexes for filtering
+    # Required for user_id, document_id, and organisation_id filters to work
+    # try/except on each because the index may already exist on subsequent startups
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="user_id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+    except Exception:
+        pass
+
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="document_id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+    except Exception:
+        pass
+
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="organisation_id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
+    except Exception:
+        pass
 
 
 def store_chunks(chunks: List[dict]) -> None:
@@ -85,7 +116,6 @@ def search_chunks(
 ) -> List[dict]:
     client = get_qdrant_client()
 
-    # Build filter for data isolation - users only see their own chunks
     must_conditions = [
         FieldCondition(
             key="user_id",

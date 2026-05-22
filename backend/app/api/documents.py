@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get, key_subscription
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_test_user
 from app.core.idempotency import check_idempotency, save_idempotent_response
 from app.models.document import Document
 from app.models.organisation import User
@@ -38,7 +38,7 @@ async def upload_document_endpoint(
     request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_test_user),
 ):
     cached = await check_idempotency(
         prefix="document_upload",

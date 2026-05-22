@@ -52,3 +52,26 @@ def get_rls_db(
             next(db_gen)
         except StopIteration:
             pass
+
+async def get_test_user(db: Session = Depends(get_db)) -> User:
+    # TEMPORARY - remove before production
+    # Creates or retrieves a test user for local development
+    from app.models.organisation import User
+    import uuid
+
+    test_user = db.query(User).filter(
+        User.email == "test@lilyai.dev"
+    ).first()
+
+    if not test_user:
+        test_user = User(
+            id=uuid.uuid4(),
+            email="test@lilyai.dev",
+            auth0_id="test|local_dev",
+            is_active=True,
+            role="admin",
+        )
+        db.add(test_user)
+        db.commit()
+
+    return test_user

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.agents.orchestrator_agent import orchestrate
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_test_user
 from app.core.prompt_guard import validate_question
 from app.models.conversation import Conversation
 from app.models.organisation import User
@@ -119,7 +119,7 @@ async def increment_usage_counters(user_id: str) -> None:
 async def ask_question(
     request: QueryRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_test_user),
 ):
     validate_question(request.question)
 

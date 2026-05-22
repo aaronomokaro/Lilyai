@@ -3,7 +3,6 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 class Settings(BaseSettings):
     # Application
     APP_ENV: str = "development"
@@ -26,6 +25,10 @@ class Settings(BaseSettings):
     # Voyage AI
     VOYAGE_API_KEY: str
 
+    # Qdrant
+    QDRANT_URL: str
+    QDRANT_API_KEY: str
+
     # AWS S3
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
@@ -34,6 +37,10 @@ class Settings(BaseSettings):
 
     # Fernet encryption
     FERNET_KEY: str
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent.parent.parent / ".env"),
