@@ -21,10 +21,19 @@ async def get_current_user(
     user = db.query(User).filter(User.auth0_id == auth0_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+        # Auto-provision user on first login
+        email = payload.get("email", "")
+        user = User(
+            auth0_id=auth0_id,
+            email=email,
+            account_type="individual",
+            token_version=1,
+            is_active=True,
+            role="user",
         )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     if not user.is_active:
         raise HTTPException(
