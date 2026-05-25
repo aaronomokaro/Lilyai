@@ -1,5 +1,6 @@
 FROM python:3.11-slim
 
+# Install libmagic system dependency
 RUN apt-get update && apt-get install -y \
     libmagic1 \
     libmagic-dev \
@@ -7,6 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Cache bust: requirements updated 2026-05-25
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
