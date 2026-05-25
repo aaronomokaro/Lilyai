@@ -60,8 +60,11 @@ def get_google_client_secret() -> str:
 
 
 def get_google_redirect_uri(provider: str) -> str:
-    # TODO: Update base URL when Railway is configured
-    base_url = "http://localhost:8001"
+    settings = get_settings()
+    if settings.APP_ENV == "production":
+        base_url = "https://lilyai-production.up.railway.app"
+    else:
+        base_url = "http://localhost:8001"
     return f"{base_url}/integrations/{provider}/callback"
 
 
