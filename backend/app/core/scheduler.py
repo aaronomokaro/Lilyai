@@ -94,6 +94,20 @@ async def run_usage_aggregation():
         logger.error(f"Usage aggregation failed: {e}")
 
 
+async def run_qdrant_keepalive():
+    logger.info("Starting Qdrant keepalive ping")
+    try:
+        from app.services.qdrant_service import get_qdrant_client
+
+        client = get_qdrant_client()
+        collections = client.get_collections()
+        logger.info(
+            f"Qdrant keepalive successful. Collections: {[c.name for c in collections.collections]}"
+        )
+    except Exception as e:
+        logger.error(f"Qdrant keepalive failed: {e}")
+
+
 async def run_output_cleanup():
     logger.info("Starting nightly output cleanup job")
     try:
@@ -157,6 +171,13 @@ def setup_scheduler():
         run_output_cleanup,
         CronTrigger(hour=2, minute=30),
         id="output_cleanup",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        run_qdrant_keepalive,
+        CronTrigger(hour=6, minute=0),
+        id="qdrant_keepalive",
         replace_existing=True,
     )
 
