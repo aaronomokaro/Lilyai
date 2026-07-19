@@ -1,3 +1,5 @@
+import logging
+import re
 import uuid
 from typing import List, Optional
 
@@ -11,6 +13,7 @@ from app.services.s3_service import build_s3_key, upload_document
 from app.services.websocket_service import manager
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 OUTPUT_TYPES = {
     "contract_risk_report": "Contract Risk Report",
@@ -24,7 +27,7 @@ OUTPUT_TYPES = {
 
 STORAGE_PERMANENT_TIERS = ["professional", "enterprise"]
 
-OUTPUT_PROMPT = """<role>You are a professional document formatter for a document intelligence platform. You format findings into structured professional documents. You never add information beyond what is in the source material.</role>
+OUTPUT_PROMPT = """<role>You are a professional document formatter for a document intelligence platform serving legal and finance professionals. You format findings into structured professional documents. You never add information beyond what is in the source material.</role>
 
 <output_type>{output_type}</output_type>
 
@@ -43,12 +46,40 @@ OUTPUT_PROMPT = """<role>You are a professional document formatter for a documen
 <rule id="6">End with a key findings or conclusions section.</rule>
 <rule id="7">Return clean plain text only. No markdown formatting symbols.</rule>
 <rule id="8">Never add information, opinions, or claims not present in the source material.</rule>
+<rule id="9">Length should match the content, not a target word count. A report with 3 supported findings should be short. Do not pad to appear thorough.</rule>
+<rule id="10">If the source material is too thin to produce a meaningful {output_type_label}, state this directly at the top: "There is insufficient source material to produce a complete {output_type_label}. The following is based on the limited content available:" and proceed with whatever can be honestly supported.</rule>
 </rules>
 
-<task>Format the source material into a professional {output_type_label}. Structure it clearly and ensure every claim retains its citation.</task>"""
+<task>Format the source material into a professional {output_type_label}. Structure it clearly and ensure every claim retains its citation.</task>
+
+<example>
+Executive Summary: This due diligence summary covers three key areas of the target company's commercial agreements, identifying one high-priority liability concern and two areas requiring further review.
+
+Key Contractual Obligations: The primary services agreement includes an uncapped indemnification clause exposing the acquirer to potentially unlimited liability. [Document: services_agreement.pdf, Page: 8, Chunk: 5]
+
+Key Findings: The uncapped indemnification clause should be renegotiated before close. [Document: services_agreement.pdf, Page: 8, Chunk: 5]
+</example>"""
+
+OUTPUT_TYPE_CLASSIFICATION_PROMPT = """You are classifying what type of formatted output a user wants from a document intelligence platform.
+
+<request>{request}</request>
+
+<output_types>
+<type id="contract_risk_report">User wants a report specifically on risks in a contract or agreement.</type>
+<type id="due_diligence_summary">User wants a due diligence style summary covering multiple areas of a deal or document set.</type>
+<type id="clause_extraction_table">User wants specific clauses or fields pulled out into a table or list format.</type>
+<type id="data_aggregation_table">User wants data points from multiple documents pulled into one table.</type>
+<type id="version_comparison_report">User wants a report showing what changed between document versions.</type>
+<type id="reference_list">User wants a bibliography or reference list.</type>
+<type id="executive_briefing">General summary request that does not fit any category above.</type>
+</output_types>
+
+Respond in this exact format:
+<output_type>type_id</output_type>
+<confidence>high|medium|low</confidence>"""
 
 
-def detect_output_type(request: str) -> str:
+def detect_output_type(request: str) -> Optional[str]:
     request_lower = request.lower()
 
     if any(
@@ -66,8 +97,47 @@ def detect_output_type(request: str) -> str:
         return "version_comparison_report"
     if any(w in request_lower for w in ["reference", "bibliography", "apa", "harvard"]):
         return "reference_list"
+    if any(
+        w in request_lower
+        for w in ["executive briefing", "summary", "brief", "overview"]
+    ):
+        return "executive_briefing"
 
-    return "executive_briefing"
+    return None
+
+
+async def detect_output_type_with_fallback(request: str) -> str:
+    rule_based_result = detect_output_type(request)
+    if rule_based_result:
+        return rule_based_result
+
+    client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    response = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=50,
+        messages=[
+            {
+                "role": "user",
+                "content": OUTPUT_TYPE_CLASSIFICATION_PROMPT.format(request=request),
+            }
+        ],
+    )
+    raw_text = response.content[0].text.strip()
+
+    type_match = re.search(r"<output_type>(.*?)</output_type>", raw_text)
+    confidence_match = re.search(r"<confidence>(.*?)</confidence>", raw_text)
+
+    output_type = type_match.group(1).strip() if type_match else "executive_briefing"
+    confidence = (
+        confidence_match.group(1).strip().lower() if confidence_match else "low"
+    )
+
+    if confidence == "low":
+        logger.warning(
+            f"Low confidence output type classification: type={output_type}, request={request[:100]}"
+        )
+
+    return output_type
 
 
 async def format_output(
@@ -162,7 +232,7 @@ async def generate_output(
     tier: str = "starter",
     source_material: Optional[str] = None,
 ) -> dict:
-    output_type = detect_output_type(request)
+    output_type = await detect_output_type_with_fallback(request)
 
     await manager.send_to_user(
         user_id=user_id,

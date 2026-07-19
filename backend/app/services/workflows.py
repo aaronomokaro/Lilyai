@@ -31,6 +31,7 @@ REFERENCE_LIST_PROMPT = """<role>You are a professional academic reference forma
 <rule id="3">If a metadata field cannot be found, use the filename as the title and mark other fields as unknown.</rule>
 <rule id="4">Sort references alphabetically by author surname.</rule>
 <rule id="5">Return only the formatted reference list. No commentary.</rule>
+<rule id="6">If no documents contain sufficient metadata to form even a minimal reference, state: "No documents contained sufficient metadata to generate references." Do not fabricate authors, titles, or dates.</rule>
 </rules>
 
 <task>Generate a {style} reference list from the provided documents.</task>"""
@@ -62,6 +63,7 @@ CITATION: [Document: employment_contract.pdf, Page: 7, Chunk: 5]
 <rule id="3">Present extractions in a structured format: field name, extracted value, citation.</rule>
 <rule id="4">If a field is not found, explicitly state it is absent.</rule>
 <rule id="5">Do not interpret or summarise - extract the exact text.</rule>
+<rule id="6">If the requested field is not found anywhere in any document, state: "FIELD: {request} - not found in any provided document." Do not return an empty response.</rule>
 </rules>
 
 <task>Systematically extract all instances of: {request}</task>"""
@@ -95,6 +97,7 @@ CITATION V2: [Document: contract_v2.pdf, Page: 5, Chunk: 3]
 <rule id="5">Significant: changes that alter meaning but not core obligations.</rule>
 <rule id="6">Minor: changes that clarify without altering meaning.</rule>
 <rule id="7">Administrative: formatting, numbering, or typographical changes.</rule>
+<rule id="8">If the two versions are identical in substance with no meaningful differences, state: "No material differences identified between the two versions." Do not invent changes to appear thorough.</rule>
 </rules>
 
 <task>Compare the two document versions and identify all changes with significance ratings.</task>"""
@@ -123,6 +126,7 @@ Document: contract_finco.pdf | Data Point: Payment Terms | Value: Not Found
 <rule id="4">If a data point is not found in a document, mark it as Not Found.</rule>
 <rule id="5">Be precise - extract exact values, not summaries.</rule>
 <rule id="6">Maintain consistency in how values are presented across documents.</rule>
+<rule id="7">If the requested data point is Not Found in every single document provided, still list each document with Not Found rather than returning an empty table.</rule>
 </rules>
 
 <task>Aggregate the following data points across all provided documents: {request}</task>"""

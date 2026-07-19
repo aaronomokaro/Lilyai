@@ -15,6 +15,62 @@ settings = get_settings()
 MAX_ITERATIONS = 3
 SUFFICIENCY_THRESHOLD = "sufficient"
 
+COMPLEXITY_ASSESSMENT_PROMPT = """<question>{question}</question>
+
+<task>Determine if this question requires searching multiple document sections or comparing information across sources to answer fully, versus a single direct lookup.</task>
+
+<examples>
+<example>
+<question>What is the payment due date in this invoice?</question>
+<answer>simple</answer>
+</example>
+<example>
+<question>How does the liability clause in this contract compare to industry standard terms, and what related obligations does it create elsewhere in the document?</question>
+<answer>complex</answer>
+</example>
+</examples>
+
+Answer with exactly one word: simple or complex."""
+
+SUFFICIENCY_EVALUATION_PROMPT = """<question>{question}</question>
+
+<retrieved_chunks>
+{chunk_summary}
+</retrieved_chunks>
+
+<task>Determine whether the retrieved chunks contain sufficient information to fully and accurately answer the question.</task>
+
+<rules>
+<rule id="1">Judge based on the full chunk content shown above, not just the first sentence.</rule>
+<rule id="2">Mark insufficient if the chunks are on-topic but missing the specific detail the question asks for.</rule>
+<rule id="3">Mark insufficient if the chunks appear to be about the wrong topic entirely.</rule>
+<rule id="4">Only mark sufficient if the exact information needed to answer is present in the chunks, not merely related to it.</rule>
+</rules>
+
+Respond in this exact format:
+STATUS: sufficient OR insufficient
+MISSING: what specific information is missing, empty if sufficient"""
+
+QUERY_OPTIMIZATION_PROMPT = """<original_question>{original_question}</original_question>
+
+<missing_information>{missing_info}</missing_information>
+
+<task>Write a refined search query that will retrieve the missing information.</task>
+
+<rules>
+<rule id="1">Preserve the core intent of the original question. Do not change what is being asked, only how it is phrased for search.</rule>
+<rule id="2">Use different terminology than the original question if the missing information suggests the document uses different vocabulary for the concept.</rule>
+<rule id="3">Be specific and targeted at the missing information, not a broader restatement of the original question.</rule>
+</rules>
+
+<example>
+<original_question>What is the notice period for termination?</original_question>
+<missing_information>The chunks discuss general contract duration but not specific notice requirements before ending the agreement.</missing_information>
+<refined_query>written notice requirement before contract termination or expiry</refined_query>
+</example>
+
+Return only the search query, nothing else."""
+
 
 async def assess_complexity(question: str, query_type: QueryType) -> bool:
     # Rule-based complexity assessment first
@@ -35,12 +91,7 @@ async def assess_complexity(question: str, query_type: QueryType) -> bool:
         messages=[
             {
                 "role": "user",
-                "content": (
-                    f"<question>{question}</question>\n\n"
-                    "Is this question complex enough to require searching multiple "
-                    "document sections or comparing information across sources? "
-                    "Answer with exactly one word: 'simple' or 'complex'."
-                ),
+                "content": COMPLEXITY_ASSESSMENT_PROMPT.format(question=question),
             }
         ],
     )
@@ -61,7 +112,7 @@ async def evaluate_sufficiency(
 
     chunk_summary = "\n".join(
         [
-            f"<chunk index='{i}'>{c['content'][:200]}...</chunk>"
+            f"<chunk index='{i}'>{c['content'][:800]}</chunk>"
             for i, c in enumerate(chunks)
         ]
     )
@@ -72,14 +123,8 @@ async def evaluate_sufficiency(
         messages=[
             {
                 "role": "user",
-                "content": (
-                    f"<question>{question}</question>\n\n"
-                    f"<retrieved_chunks>\n{chunk_summary}\n</retrieved_chunks>\n\n"
-                    "Do the retrieved chunks contain sufficient information to fully "
-                    "answer the question?\n\n"
-                    "Respond in this exact format:\n"
-                    "STATUS: sufficient OR insufficient OR needs_refinement\n"
-                    "MISSING: what specific information is missing (if any)"
+                "content": SUFFICIENCY_EVALUATION_PROMPT.format(
+                    question=question, chunk_summary=chunk_summary
                 ),
             }
         ],
@@ -109,11 +154,8 @@ async def optimize_query(original_question: str, missing_info: str) -> str:
         messages=[
             {
                 "role": "user",
-                "content": (
-                    f"<original_question>{original_question}</original_question>\n\n"
-                    f"<missing_information>{missing_info}</missing_information>\n\n"
-                    "Write a refined search query to find the missing information. "
-                    "Return only the search query, nothing else."
+                "content": QUERY_OPTIMIZATION_PROMPT.format(
+                    original_question=original_question, missing_info=missing_info
                 ),
             }
         ],
