@@ -80,14 +80,18 @@ async def generate_answer(
     # Stream directly without going through circuit breaker
     # Circuit breaker does not support async generators
     # TODO: Add circuit breaker support for streaming in a future iteration
-    async with client.messages.stream(
-        model=model,
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=messages,
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
+    async def _stream_generator():
+        async with client.messages.stream(
+            model=model,
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=messages,
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
+
+    async for text in anthropic_breaker.call_stream(_stream_generator):
+        yield text
 
 
 def extract_citations(answer: str) -> List[dict]:
