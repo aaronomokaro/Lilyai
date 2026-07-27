@@ -23,7 +23,13 @@ async def get_current_user(
 
     if not user:
         # Auto-provision user on first login
-        email = payload.get("email", "")
+        email = payload.get("email")
+        if not email:
+            # Some tokens (Google OAuth, M2M) carry no email claim.
+            # Derive a guaranteed-unique placeholder from the auth0_id
+            # so we never collide on the unique email constraint.
+            safe_auth0_id = auth0_id.replace("|", "_").replace("@", "_at_")
+            email = f"{safe_auth0_id}@no-email.lilyai.internal"
         user = User(
             auth0_id=auth0_id,
             email=email,
