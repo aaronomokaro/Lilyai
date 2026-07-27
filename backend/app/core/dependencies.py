@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db, get_db_with_user
 from app.core.security import verify_token
 from app.models.organisation import User
+from app.models.subscription import Subscription
 
 
 async def get_current_user(
@@ -34,6 +35,22 @@ async def get_current_user(
         db.add(user)
         db.commit()
         db.refresh(user)
+
+        # Auto-provision a subscription so new users can immediately use the platform
+        # TODO: switch to real Free tier defaults once beta ends and paid tiers go live
+        subscription = Subscription(
+            user_id=user.id,
+            plan="beta",
+            status="active",
+            queries_per_day=1000,
+            queries_per_month=20000,
+            max_documents=200,
+            max_pages_per_doc=1000,
+            max_file_size_mb=100,
+            storage_limit_mb=20000,
+        )
+        db.add(subscription)
+        db.commit()
 
     if not user.is_active:
         raise HTTPException(
