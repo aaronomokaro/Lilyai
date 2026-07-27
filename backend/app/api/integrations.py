@@ -50,12 +50,10 @@ def plan_meets_minimum(user_plan: str, minimum_plan: str) -> bool:
 
 
 def get_google_client_id() -> str:
-    # TODO: Add GOOGLE_CLIENT_ID to environment variables when setting up Google OAuth
     return getattr(settings, "GOOGLE_CLIENT_ID", "")
 
 
 def get_google_client_secret() -> str:
-    # TODO: Add GOOGLE_CLIENT_SECRET to environment variables when setting up Google OAuth
     return getattr(settings, "GOOGLE_CLIENT_SECRET", "")
 
 
