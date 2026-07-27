@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
 from app.api.collections import router as collections_router
@@ -12,7 +13,6 @@ from app.api.tags import router as tags_router
 from app.api.usage import router as usage_router
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user
-from app.core.middleware import SecurityMiddleware
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.core.scheduler import setup_scheduler
 from app.models.organisation import User
@@ -26,7 +26,13 @@ app = FastAPI(
     version="0.1.0",
 )
 
-from app.core.middleware import SecurityMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
