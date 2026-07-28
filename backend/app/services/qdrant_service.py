@@ -6,6 +6,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PayloadSchemaType,
     PointStruct,
@@ -135,7 +136,7 @@ def search_chunks(
         must_conditions.append(
             FieldCondition(
                 key="document_id",
-                match=MatchValue(any=document_ids),
+                match=MatchAny(any=document_ids),
             )
         )
 
