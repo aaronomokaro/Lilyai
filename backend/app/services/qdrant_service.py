@@ -91,6 +91,7 @@ def store_chunks(chunks: List[dict]) -> None:
                         else None
                     ),
                     "chunk_index": chunk["chunk_index"],
+                    "page_number": chunk.get("page_number"),
                     "content": chunk["content"],
                 },
             )
@@ -154,6 +155,7 @@ def search_chunks(
             "document_id": result.payload["document_id"],
             "content": result.payload["content"],
             "chunk_index": result.payload["chunk_index"],
+            "page_number": result.payload.get("page_number"),
             "score": result.score,
         }
         for result in results

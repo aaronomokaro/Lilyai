@@ -115,3 +115,43 @@ def chunk_document(
         )
 
     return chunks
+
+
+def chunk_document_by_pages(
+    pages: List[dict],
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+    organisation_id: uuid.UUID,
+) -> List[dict]:
+    """
+    Chunk a document page by page, tagging each chunk with its page number.
+    `pages` is a list of {"page_number": int|None, "text": str} from extract_pages.
+    Chunk index is continuous across the whole document, not reset per page.
+    """
+    chunks = []
+    global_index = 0
+
+    for page in pages:
+        page_number = page["page_number"]
+        cleaned = clean_text(page["text"])
+        paragraphs = split_into_paragraphs(cleaned)
+        paragraphs = merge_short_paragraphs(paragraphs)
+        paragraphs = split_long_paragraphs(paragraphs)
+        paragraphs = add_overlap(paragraphs)
+
+        for content in paragraphs:
+            chunks.append(
+                {
+                    "id": uuid.uuid4(),
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "organisation_id": organisation_id,
+                    "content": content,
+                    "chunk_index": global_index,
+                    "page_number": page_number,
+                    "token_count": len(content) // 4,
+                }
+            )
+            global_index += 1
+
+    return chunks

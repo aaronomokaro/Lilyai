@@ -71,3 +71,52 @@ def extract_text(file_content: bytes, mime_type: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to extract text from document: {str(e)}",
         )
+
+
+def extract_pages(file_content: bytes, mime_type: str) -> list[dict]:
+    """
+    Returns a list of {"page_number": int, "text": str} for each page.
+    For PDFs, page_number is the real page. For formats without real pages
+    (Word, plain text), everything is returned as a single page_number=None entry
+    so the caller can still process the text while knowing no page data exists.
+    """
+    try:
+        if mime_type == "application/pdf":
+            doc = fitz.open(stream=file_content, filetype="pdf")
+            pages = []
+            for index, page in enumerate(doc):
+                page_text = page.get_text()
+                if page_text.strip():
+                    pages.append(
+                        {
+                            "page_number": index + 1,  # 1-based, human-readable
+                            "text": page_text,
+                        }
+                    )
+            doc.close()
+            return pages
+        elif (
+            mime_type
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ):
+            import io
+
+            document = docx.Document(io.BytesIO(file_content))
+            paragraphs = [p.text for p in document.paragraphs if p.text.strip()]
+            full_text = "\n\n".join(paragraphs)
+            # Word has no reliable page numbers - return as a single pageless entry
+            return [{"page_number": None, "text": full_text}]
+        elif mime_type == "text/plain":
+            text = file_content.decode("utf-8", errors="ignore")
+            return [{"page_number": None, "text": text}]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type for text extraction.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to extract text from document: {str(e)}",
+        )
