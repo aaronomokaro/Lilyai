@@ -17,11 +17,12 @@ async def get_jwks() -> dict:
         return response.json()
 
 
-async def verify_token(
-    credentials: HTTPAuthorizationCredentials = Depends(token_auth_scheme),
-) -> dict:
-    token = credentials.credentials
-
+async def verify_token_string(token: str) -> dict:
+    """
+    Verify a raw JWT string and return its payload. Shared verification used by
+    both the HTTP dependency (verify_token) and the WebSocket handshake, so the
+    JWKS/decode logic lives in one place.
+    """
     try:
         jwks = await get_jwks()
         unverified_header = jwt.get_unverified_header(token)
@@ -59,3 +60,9 @@ async def verify_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
+
+
+async def verify_token(
+    credentials: HTTPAuthorizationCredentials = Depends(token_auth_scheme),
+) -> dict:
+    return await verify_token_string(credentials.credentials)
