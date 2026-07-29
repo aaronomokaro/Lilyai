@@ -11,15 +11,24 @@ scheduler = AsyncIOScheduler()
 async def run_nightly_evaluation():
     logger.info("Starting nightly evaluation batch job")
     try:
+        from sqlalchemy import text
+
         from app.agents.evaluation_agent import run_nightly_batch
-        from app.core.database import SessionLocal
+        from app.core.database import SessionLocal, set_rls_context
         from app.models.organisation import User
         from app.models.subscription import Subscription
 
         db = SessionLocal()
         try:
-            users = db.query(User).filter(User.is_active == True).all()
+            users = (
+                db.query(User)
+                .from_statement(
+                    text("SELECT * FROM get_active_users_for_maintenance()")
+                )
+                .all()
+            )
             for user in users:
+                set_rls_context(db, user_id=str(user.id))
                 subscription = (
                     db.query(Subscription)
                     .filter(Subscription.user_id == user.id)
@@ -43,9 +52,10 @@ async def run_usage_aggregation():
         import datetime
 
         import redis.asyncio as aioredis
+        from sqlalchemy import text
 
         from app.core.config import get_settings
-        from app.core.database import SessionLocal
+        from app.core.database import SessionLocal, set_rls_context
         from app.models.analytics import UserDailyStats
         from app.models.organisation import User
 
@@ -54,11 +64,18 @@ async def run_usage_aggregation():
 
         try:
             yesterday = datetime.date.today() - datetime.timedelta(days=1)
-            users = db.query(User).filter(User.is_active == True).all()
+            users = (
+                db.query(User)
+                .from_statement(
+                    text("SELECT * FROM get_active_users_for_maintenance()")
+                )
+                .all()
+            )
 
             redis = await aioredis.from_url(settings.REDIS_URL)
 
             for user in users:
+                set_rls_context(db, user_id=str(user.id))
                 date_key = yesterday.strftime("%Y-%m-%d")
                 queries_raw = await redis.get(f"queries:day:{user.id}:{date_key}")
                 queries_count = int(queries_raw) if queries_raw else 0
@@ -113,7 +130,10 @@ async def run_output_cleanup():
     try:
         import datetime
 
-        from app.core.database import SessionLocal
+        from sqlalchemy import text
+
+        from app.core.database import SessionLocal, set_rls_context
+        from app.models.organisation import User
         from app.models.output import Output
         from app.services.s3_service import delete_document
 
@@ -121,25 +141,37 @@ async def run_output_cleanup():
         now = datetime.datetime.utcnow()
 
         try:
-            expired_outputs = (
-                db.query(Output)
-                .filter(
-                    Output.is_permanent == False,
-                    Output.expires_at <= now,
-                    Output.status == "ready",
+            users = (
+                db.query(User)
+                .from_statement(
+                    text("SELECT * FROM get_active_users_for_maintenance()")
                 )
                 .all()
             )
 
-            for output in expired_outputs:
-                try:
-                    await delete_document(output.s3_key)
-                except Exception:
-                    pass
-                output.status = "expired"
+            total_cleaned = 0
+            for user in users:
+                set_rls_context(db, user_id=str(user.id))
+                expired_outputs = (
+                    db.query(Output)
+                    .filter(
+                        Output.is_permanent == False,
+                        Output.expires_at <= now,
+                        Output.status == "ready",
+                    )
+                    .all()
+                )
+
+                for output in expired_outputs:
+                    try:
+                        await delete_document(output.s3_key)
+                    except Exception:
+                        pass
+                    output.status = "expired"
+                total_cleaned += len(expired_outputs)
 
             db.commit()
-            logger.info(f"Cleaned up {len(expired_outputs)} expired outputs")
+            logger.info(f"Cleaned up {total_cleaned} expired outputs")
 
         finally:
             db.close()

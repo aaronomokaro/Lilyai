@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, get_db_with_user
@@ -19,7 +20,12 @@ async def get_current_user(
             detail="Invalid token payload",
         )
 
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
+    user = (
+        db.query(User)
+        .from_statement(text("SELECT * FROM get_user_by_auth0_id(:auth0_id)"))
+        .params(auth0_id=auth0_id)
+        .first()
+    )
 
     if not user:
         # Auto-provision user on first login

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import cache_get, key_subscription
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.core.idempotency import check_idempotency, save_idempotent_response
 from app.models.document import Document
 from app.models.organisation import User
@@ -37,7 +37,7 @@ async def get_user_subscription(user: User, db: Session) -> Subscription:
 async def upload_document_endpoint(
     request: Request,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     cached = await check_idempotency(
@@ -133,7 +133,7 @@ async def upload_document_endpoint(
 @router.get("/search/")
 async def search_documents(
     q: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if not q or len(q.strip()) < 2:
@@ -168,7 +168,7 @@ async def search_documents(
 
 @router.get("/")
 async def list_documents(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     documents = (
@@ -198,7 +198,7 @@ async def list_documents(
 @router.get("/{document_id}")
 async def get_document(
     document_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     document = (
@@ -232,7 +232,7 @@ async def get_document(
 @router.delete("/{document_id}", status_code=204)
 async def archive_document(
     document_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     document = (

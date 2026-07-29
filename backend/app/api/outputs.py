@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.organisation import User
 from app.models.output import Output
 from app.services.s3_service import generate_presigned_url
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/outputs", tags=["outputs"])
 
 @router.get("/")
 async def list_outputs(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     outputs = (
@@ -41,7 +41,7 @@ async def list_outputs(
 @router.get("/{output_id}/download")
 async def get_download_url(
     output_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     output = (

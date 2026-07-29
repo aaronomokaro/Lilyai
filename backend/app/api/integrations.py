@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.organisation import User
 from app.models.subscription import Subscription
 from app.services.integration_service import (
@@ -88,7 +88,7 @@ class SaveToDriveRequest(BaseModel):
 # Status endpoint must come before dynamic /{provider} routes
 @router.get("/status")
 async def get_integration_status(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     gmail_token = get_integration_token(str(current_user.id), "gmail", db)
@@ -111,7 +111,7 @@ async def get_integration_status(
 @router.post("/token")
 async def store_oauth_token(
     request: OAuthTokenRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if request.provider == "drive":
@@ -141,7 +141,7 @@ async def store_oauth_token(
 @router.post("/gmail/send")
 async def send_via_gmail(
     request: SendEmailRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     result = await send_gmail(
@@ -166,7 +166,7 @@ async def send_via_gmail(
 @router.post("/drive/save")
 async def save_output_to_drive(
     request: SaveToDriveRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     user_plan = get_user_plan(current_user, db)
@@ -219,7 +219,7 @@ async def save_output_to_drive(
 @router.get("/{provider}/connect")
 async def initiate_oauth(
     provider: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if provider not in ["gmail", "drive"]:
@@ -272,7 +272,7 @@ async def oauth_callback_redirect(
     provider: str,
     code: str,
     state: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if provider not in ["gmail", "drive"]:

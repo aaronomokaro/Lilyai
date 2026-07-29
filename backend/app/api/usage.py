@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.analytics import UserDailyStats
 from app.models.audit import Notification
 from app.models.organisation import User
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/usage", tags=["usage"])
 
 @router.get("/")
 async def get_usage(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     subscription = (
@@ -92,7 +92,7 @@ async def get_usage(
 
 @router.get("/notifications")
 async def get_notifications(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     notifications = (
@@ -122,7 +122,7 @@ async def get_notifications(
 @router.patch("/notifications/{notification_id}/read", status_code=204)
 async def mark_notification_read(
     notification_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     notification = (

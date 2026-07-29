@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.conversation import Conversation, ConversationTurn, Query
 from app.models.organisation import User
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 @router.get("/")
 async def list_conversations(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     conversations = (
@@ -41,7 +41,7 @@ async def list_conversations(
 @router.get("/{conversation_id}")
 async def get_conversation(
     conversation_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     conversation = (
@@ -71,7 +71,7 @@ async def get_conversation(
 @router.get("/{conversation_id}/messages")
 async def get_conversation_messages(
     conversation_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     conversation = (
@@ -124,7 +124,7 @@ async def get_conversation_messages(
 @router.delete("/{conversation_id}", status_code=204)
 async def archive_conversation(
     conversation_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     conversation = (

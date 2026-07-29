@@ -3,7 +3,7 @@ import uuid
 from celery import Celery
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, set_rls_context
 from app.models.document import Document
 from app.models.processing import Chunk, ProcessingJob
 from app.services.chunking_service import chunk_document, chunk_document_by_pages
@@ -43,6 +43,7 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
     from app.services.websocket_service import manager
 
     db = SessionLocal()
+    set_rls_context(db, user_id=user_id, organisation_id=organisation_id)
     document = None
     job = None
 
