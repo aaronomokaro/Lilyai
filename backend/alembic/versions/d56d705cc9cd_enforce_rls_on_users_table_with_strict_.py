@@ -48,6 +48,49 @@ def upgrade() -> None:
         $function$;
         """
     )
+    
+    # 2b. SECURITY DEFINER function to provision a new user + beta subscription
+    #     atomically. The only path allowed to create accounts under the
+    #     strict users-table RLS policy (auto-provisioning on first login).
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION public.provision_user(p_auth0_id text, p_email text)
+        RETURNS SETOF users
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path TO 'public'
+        AS $function$
+        DECLARE
+            v_user_id uuid;
+        BEGIN
+            INSERT INTO users (
+                id, auth0_id, email, account_type, token_version,
+                is_active, role, created_at, updated_at
+            )
+            VALUES (
+                gen_random_uuid(), p_auth0_id, p_email, 'individual', 1,
+                true, 'user', NOW(), NOW()
+            )
+            RETURNING id INTO v_user_id;
+
+            INSERT INTO subscriptions (
+                id, user_id, plan, status,
+                queries_per_day, queries_per_month, max_documents,
+                max_pages_per_doc, max_file_size_mb, storage_limit_mb,
+                created_at, updated_at
+            )
+            VALUES (
+                gen_random_uuid(), v_user_id, 'beta', 'active',
+                1000, 20000, 200,
+                1000, 100, 20000,
+                NOW(), NOW()
+            );
+
+            RETURN QUERY SELECT * FROM users WHERE id = v_user_id;
+        END;
+        $function$;
+        """
+    )
 
     # 3. Enable RLS on users and add the strict own-row-only policy.
     op.execute("ALTER TABLE users ENABLE ROW LEVEL SECURITY")
@@ -59,9 +102,12 @@ def upgrade() -> None:
         """
     )
 
-    # 4. Grants: the restricted app role must be able to CALL the two functions.
+    # 4. Grants: the restricted app role must be able to CALL the functions.
     op.execute(
         "GRANT EXECUTE ON FUNCTION public.get_user_by_auth0_id(text) TO lilyai_app"
+    )
+    op.execute(
+        "GRANT EXECUTE ON FUNCTION public.provision_user(text, text) TO lilyai_app"
     )
     op.execute(
         "GRANT EXECUTE ON FUNCTION public.get_active_users_for_maintenance() TO lilyai_app"

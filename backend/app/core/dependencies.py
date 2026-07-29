@@ -28,22 +28,18 @@ async def get_current_user(
     )
 
     if not user:
-        # Auto-provision user on first login
+        # Auto-provision user + beta subscription on first login via a
+        # controlled SECURITY DEFINER function - the only path allowed to
+        # create accounts under the strict users-table RLS policy.
         # Email may be absent (Google OAuth, M2M tokens carry no email claim).
-        # Store NULL in that case - the unique constraint permits multiple NULLs,
-        # while auth0_id remains the true unique identifier for every user.
         email = payload.get("email")
-        user = User(
-            auth0_id=auth0_id,
-            email=email,
-            account_type="individual",
-            token_version=1,
-            is_active=True,
-            role="user",
+        user = (
+            db.query(User)
+            .from_statement(text("SELECT * FROM provision_user(:auth0_id, :email)"))
+            .params(auth0_id=auth0_id, email=email)
+            .first()
         )
-        db.add(user)
         db.commit()
-        db.refresh(user)
 
         # Auto-provision a subscription so new users can immediately use the platform
         # TODO: switch to real Free tier defaults once beta ends and paid tiers go live
