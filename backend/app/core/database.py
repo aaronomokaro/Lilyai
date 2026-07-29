@@ -7,7 +7,9 @@ settings = get_settings()
 
 engine = create_engine(settings.DATABASE_URL)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
+)
 
 
 class Base(DeclarativeBase):
@@ -47,7 +49,21 @@ def set_rls_context(
 def get_db_with_user(user_id: str, organisation_id: str = None):
     db = SessionLocal()
     try:
-        set_rls_context(db, user_id=user_id, organisation_id=organisation_id)
+        # Session-scoped (is_local=False) so the RLS context survives the
+        # multiple commits that happen within a single request. Without this,
+        # a commit clears transaction-local context and subsequent object
+        # access fails RLS ("row not present").
+        set_rls_context(
+            db, user_id=user_id, organisation_id=organisation_id, is_local=False
+        )
         yield db
     finally:
+        # Clear the context before the connection returns to the pool, so it
+        # can never leak into the next request that reuses this connection.
+        try:
+            db.execute(text("SELECT set_config('app.current_user_id', '', false)"))
+            db.execute(text("SELECT set_config('app.current_org_id', '', false)"))
+            db.commit()
+        except Exception:
+            pass
         db.close()
