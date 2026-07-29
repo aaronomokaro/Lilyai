@@ -22,22 +22,26 @@ def get_db():
         db.close()
 
 
-def set_rls_context(db, user_id: str, organisation_id: str = None):
+def set_rls_context(
+    db, user_id: str, organisation_id: str = None, is_local: bool = True
+):
     """
-    Set the RLS session variables on an existing db session so row-level
-    security policies apply for this user.
+    Set the RLS session variables on a db session.
+    is_local=True: transaction-scoped, cleared on commit (for web requests).
+    is_local=False: session-scoped, persists across commits (for the worker).
     """
+    scope = "true" if is_local else "false"
     db.execute(
-        text("SELECT set_config('app.current_user_id', :user_id, true)"),
+        text(f"SELECT set_config('app.current_user_id', :user_id, {scope})"),
         {"user_id": str(user_id)},
     )
     if organisation_id:
         db.execute(
-            text("SELECT set_config('app.current_org_id', :org_id, true)"),
+            text(f"SELECT set_config('app.current_org_id', :org_id, {scope})"),
             {"org_id": str(organisation_id)},
         )
     else:
-        db.execute(text("SELECT set_config('app.current_org_id', '', true)"))
+        db.execute(text(f"SELECT set_config('app.current_org_id', '', {scope})"))
 
 
 def get_db_with_user(user_id: str, organisation_id: str = None):

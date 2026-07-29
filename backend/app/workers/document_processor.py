@@ -43,7 +43,9 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
     from app.services.websocket_service import manager
 
     db = SessionLocal()
-    set_rls_context(db, user_id=user_id, organisation_id=organisation_id)
+    set_rls_context(
+        db, user_id=user_id, organisation_id=organisation_id, is_local=False
+    )
     document = None
     job = None
 
