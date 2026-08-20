@@ -27,8 +27,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 // Documents
+// NOTE: collection roots use a trailing slash to match the FastAPI routes
+// (`@router.get("/")`). Calling them without it triggers a 307 redirect that
+// the browser refuses to follow on an authorized CORS request.
 export const documents = {
-  list: () => request<Document[]>('/documents'),
+  list: () => request<Document[]>('/documents/'),
 
   upload: async (file: File): Promise<{ id: string; status: string }> => {
     const token = await getToken()
@@ -36,7 +39,11 @@ export const documents = {
     form.append('file', file)
     const res = await fetch(`${API_URL}/documents/upload`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // Backend requires a unique key per upload to prevent double-processing
+        'Idempotency-Key': crypto.randomUUID(),
+      },
       body: form,
     })
     if (!res.ok) {
@@ -64,25 +71,25 @@ export const queries = {
 
 // Conversations
 export const conversations = {
-  list: () => request<Conversation[]>('/conversations'),
-  get: (id: string) => request<ConversationTurn[]>(`/conversations/${id}/turns`),
+  list: () => request<Conversation[]>('/conversations/'),
+  get: (id: string) => request<ConversationTurn[]>(`/conversations/${id}/messages`),
 }
 
 // Usage
 export const usage = {
-  get: () => request<UsageStats>('/usage'),
+  get: () => request<UsageStats>('/usage/'),
 }
 
 // Tags
 export const tags = {
-  list: () => request<Tag[]>('/tags'),
+  list: () => request<Tag[]>('/tags/'),
   create: (name: string, color?: string) =>
-    request<Tag>('/tags', { method: 'POST', body: JSON.stringify({ name, color }) }),
+    request<Tag>('/tags/', { method: 'POST', body: JSON.stringify({ name, color }) }),
 }
 
 // Outputs
 export const outputs = {
-  list: () => request<Output[]>('/outputs'),
+  list: () => request<Output[]>('/outputs/'),
 }
 
 // Integrations
