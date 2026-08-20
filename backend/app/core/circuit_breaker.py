@@ -67,6 +67,20 @@ class CircuitBreaker:
             self.record_failure()
             raise e
 
+    async def call_stream(self, func: Callable, *args: Any, **kwargs: Any):
+        if not self.can_attempt():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"{self.name} is currently unavailable. Please try again later.",
+            )
+        try:
+            async for item in func(*args, **kwargs):
+                yield item
+            self.record_success()
+        except Exception as e:
+            self.record_failure()
+            raise e
+
 
 # One circuit breaker per external dependency
 anthropic_breaker = CircuitBreaker(

@@ -93,20 +93,29 @@ def validate_filename(filename: str) -> None:
 def basic_malware_check(file_content: bytes) -> None:
     # NOTE: This is a basic check only.
     # Before enterprise clients: replace with ClamAV or AWS GuardDuty integration.
-    dangerous_patterns = [
+
+    # Text-based injection patterns - check the start of the file only.
+    text_patterns = [
         b"<script",
         b"javascript:",
         b"vbscript:",
-        b"\x4d\x5a",  # Windows PE executable header
     ]
-
     file_start = file_content[:1024].lower()
-    for pattern in dangerous_patterns:
-        if pattern.lower() in file_start:
+    for pattern in text_patterns:
+        if pattern in file_start:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File failed security check.",
             )
+
+    # Windows PE executables begin with the exact bytes "MZ".
+    # Only reject if the file actually STARTS with this header,
+    # not if the bytes appear anywhere inside a legitimate document.
+    if file_content[:2] == b"\x4d\x5a":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File failed security check.",
+        )
 
 
 def validate_document(

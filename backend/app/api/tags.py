@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.document import Document, DocumentTag, Tag
 from app.models.organisation import User
 
@@ -30,7 +30,7 @@ class AssignTagRequest(BaseModel):
 @router.post("/", status_code=201)
 async def create_tag(
     request: TagCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if request.color and not request.color.startswith("#"):
@@ -59,7 +59,7 @@ async def create_tag(
 
 @router.get("/")
 async def list_tags(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     tags = (
@@ -85,7 +85,7 @@ async def list_tags(
 async def update_tag(
     tag_id: uuid.UUID,
     request: TagUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     tag = (
@@ -121,7 +121,7 @@ async def update_tag(
 @router.delete("/{tag_id}", status_code=204)
 async def delete_tag(
     tag_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     tag = (
@@ -148,7 +148,7 @@ async def delete_tag(
 async def assign_tag_to_document(
     tag_id: uuid.UUID,
     request: AssignTagRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     tag = (
@@ -211,7 +211,7 @@ async def assign_tag_to_document(
 async def remove_tag_from_document(
     tag_id: uuid.UUID,
     document_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     tag = (

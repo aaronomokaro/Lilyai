@@ -88,7 +88,7 @@ async def process_query(
     document_ids: List[str] = None,
 ) -> AsyncGenerator[str, None]:
     # Step 1 - classify query
-    query_type, top_k = classify_query(question)
+    query_type, top_k = await classify_query(question)
 
     # Steps 2-5 - retrieval agent handles complexity assessment,
     # embedding, semantic search, BM25, RRF, and iterative retrieval

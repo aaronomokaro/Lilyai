@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_rls_db
 from app.models.document import Collection, CollectionDocument, Document
 from app.models.organisation import User
 
@@ -31,7 +31,7 @@ class AddDocumentRequest(BaseModel):
 @router.post("/", status_code=201)
 async def create_collection(
     request: CollectionCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     if request.parent_id:
@@ -79,7 +79,7 @@ async def create_collection(
 
 @router.get("/")
 async def list_collections(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collections = (
@@ -123,7 +123,7 @@ async def list_collections(
 async def update_collection(
     collection_id: uuid.UUID,
     request: CollectionUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collection = (
@@ -159,7 +159,7 @@ async def update_collection(
 @router.delete("/{collection_id}", status_code=204)
 async def archive_collection(
     collection_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collection = (
@@ -193,7 +193,7 @@ async def archive_collection(
 async def add_document_to_collection(
     collection_id: uuid.UUID,
     request: AddDocumentRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collection = (
@@ -257,7 +257,7 @@ async def add_document_to_collection(
 async def remove_document_from_collection(
     collection_id: uuid.UUID,
     document_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collection = (
@@ -297,7 +297,7 @@ async def remove_document_from_collection(
 @router.get("/{collection_id}/document-ids")
 async def get_collection_document_ids(
     collection_id: uuid.UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_rls_db),
     current_user: User = Depends(get_current_user),
 ):
     collection = (

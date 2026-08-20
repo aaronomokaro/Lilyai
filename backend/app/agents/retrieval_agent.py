@@ -186,7 +186,7 @@ async def iterative_retrieval(
         query_vector = await embed_single(current_query)
 
         # Semantic search
-        semantic_results = search_chunks(
+        semantic_results = await search_chunks(
             query_vector=query_vector,
             user_id=user_id,
             organisation_id=organisation_id,
@@ -249,7 +249,7 @@ async def retrieve(
         # Simple path - single retrieval
         query_vector = await embed_single(question)
 
-        semantic_results = search_chunks(
+        semantic_results = await search_chunks(
             query_vector=query_vector,
             user_id=user_id,
             organisation_id=organisation_id,

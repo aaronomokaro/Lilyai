@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, get_db_with_user
@@ -19,22 +20,26 @@ async def get_current_user(
             detail="Invalid token payload",
         )
 
-    user = db.query(User).filter(User.auth0_id == auth0_id).first()
+    user = (
+        db.query(User)
+        .from_statement(text("SELECT * FROM get_user_by_auth0_id(:auth0_id)"))
+        .params(auth0_id=auth0_id)
+        .first()
+    )
 
     if not user:
-        # Auto-provision user on first login
-        email = payload.get("email", "")
-        user = User(
-            auth0_id=auth0_id,
-            email=email,
-            account_type="individual",
-            token_version=1,
-            is_active=True,
-            role="user",
+        # Auto-provision user + beta subscription on first login via a
+        # controlled SECURITY DEFINER function - the only path allowed to
+        # create accounts under the strict users-table RLS policy.
+        # Email may be absent (Google OAuth, M2M tokens carry no email claim).
+        email = payload.get("email")
+        user = (
+            db.query(User)
+            .from_statement(text("SELECT * FROM provision_user(:auth0_id, :email)"))
+            .params(auth0_id=auth0_id, email=email)
+            .first()
         )
-        db.add(user)
         db.commit()
-        db.refresh(user)
 
         # Auto-provision a subscription so new users can immediately use the platform
         # TODO: switch to real Free tier defaults once beta ends and paid tiers go live

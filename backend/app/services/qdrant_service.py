@@ -1,11 +1,12 @@
 from typing import List
 
 from fastapi import HTTPException, status
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient, QdrantClient
 from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    MatchAny,
     MatchValue,
     PayloadSchemaType,
     PointStruct,
@@ -22,6 +23,13 @@ VECTOR_SIZE = 1024
 
 def get_qdrant_client() -> QdrantClient:
     return QdrantClient(
+        url=settings.QDRANT_URL,
+        api_key=settings.QDRANT_API_KEY,
+    )
+
+
+def get_async_qdrant_client() -> AsyncQdrantClient:
+    return AsyncQdrantClient(
         url=settings.QDRANT_URL,
         api_key=settings.QDRANT_API_KEY,
     )
@@ -90,6 +98,7 @@ def store_chunks(chunks: List[dict]) -> None:
                         else None
                     ),
                     "chunk_index": chunk["chunk_index"],
+                    "page_number": chunk.get("page_number"),
                     "content": chunk["content"],
                 },
             )
@@ -107,14 +116,14 @@ def store_chunks(chunks: List[dict]) -> None:
         )
 
 
-def search_chunks(
+async def search_chunks(
     query_vector: List[float],
     user_id: str,
     organisation_id: str = None,
     top_k: int = 5,
     document_ids: List[str] = None,
 ) -> List[dict]:
-    client = get_qdrant_client()
+    client = get_async_qdrant_client()
 
     must_conditions = [
         FieldCondition(
@@ -135,24 +144,25 @@ def search_chunks(
         must_conditions.append(
             FieldCondition(
                 key="document_id",
-                match=MatchValue(any=document_ids),
+                match=MatchAny(any=document_ids),
             )
         )
 
-    results = client.search(
+    results = await client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
         query_filter=Filter(must=must_conditions),
         limit=top_k,
         with_payload=True,
     )
-
+    await client.close()
     return [
         {
             "chunk_id": result.id,
             "document_id": result.payload["document_id"],
             "content": result.payload["content"],
             "chunk_index": result.payload["chunk_index"],
+            "page_number": result.payload.get("page_number"),
             "score": result.score,
         }
         for result in results

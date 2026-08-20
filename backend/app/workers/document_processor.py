@@ -3,11 +3,11 @@ import uuid
 from celery import Celery
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, set_rls_context
 from app.models.document import Document
 from app.models.processing import Chunk, ProcessingJob
-from app.services.chunking_service import chunk_document
-from app.services.document_extractor import extract_text
+from app.services.chunking_service import chunk_document, chunk_document_by_pages
+from app.services.document_extractor import extract_pages, extract_text
 from app.services.embedding_service import embed_chunks
 from app.services.qdrant_service import ensure_collection_exists, store_chunks
 from app.services.s3_service import download_document
@@ -43,6 +43,9 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
     from app.services.websocket_service import manager
 
     db = SessionLocal()
+    set_rls_context(
+        db, user_id=user_id, organisation_id=organisation_id, is_local=False
+    )
     document = None
     job = None
 
@@ -71,14 +74,15 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
         file_content = await_sync(download_document(document.s3_key))
 
         # Step 4 - extract text
-        text = extract_text(file_content, document.file_type)
-
-        if not text.strip():
+        # Step 4 - extract text, page by page
+        pages = extract_pages(file_content, document.file_type)
+        if not any(p["text"].strip() for p in pages):
             raise ValueError("Document contains no extractable text")
 
         # Step 5 - chunk the text
-        chunks = chunk_document(
-            text=text,
+        # Step 5 - chunk the text, page by page
+        chunks = chunk_document_by_pages(
+            pages=pages,
             document_id=uuid.UUID(document_id),
             user_id=uuid.UUID(user_id),
             organisation_id=uuid.UUID(organisation_id) if organisation_id else None,
@@ -108,6 +112,7 @@ def process_document(self, document_id: str, user_id: str, organisation_id: str 
                     ),
                     content=chunk["content"],
                     chunk_index=chunk["chunk_index"],
+                    page_number=chunk.get("page_number"),
                     token_count=chunk.get("token_count"),
                     qdrant_id=str(chunk["id"]),
                 )
